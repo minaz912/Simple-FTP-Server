@@ -14,7 +14,7 @@ import java.io.PrintWriter;
 import java.net.Socket;
 
 public class ClientHandlerThread extends Thread {
-
+	
 	private static final String DEFAULT_PATH = "/home/minaz/ftpDir/";
 	private final Socket socket;
 	private String currentDir;
@@ -24,8 +24,8 @@ public class ClientHandlerThread extends Thread {
 	// "download", "upload"};
 
 	public ClientHandlerThread(Socket incomingSocket) {
-		this.socket = incomingSocket;
-		this.currentDir = DEFAULT_PATH;
+		socket = incomingSocket;
+		currentDir = DEFAULT_PATH;
 		dir = new File(this.currentDir);
 		if (!dir.exists()) {
 			dir.mkdir();
@@ -58,8 +58,8 @@ public class ClientHandlerThread extends Thread {
 		case "help":
 			doStream.writeUTF("list\t lists all files and folders in the current directory\n"
 					+ "cd [x]\t changes the current working directory to [x]\n"
-					+ "upload\t initiates upload process to server, you will be prompted to select with file to upload\n"
-					+ "download\t ititiates file download process, you will be prompted to select with file to download");
+					+ "upload\t initiates upload process to server, you will be prompted to select which file to upload\n"
+					+ "download\t ititiates file download process, you will be prompted to select which file to download");
 			processCommand(dir, diStream, doStream);
 			break;
 		case "list":
@@ -72,24 +72,31 @@ public class ClientHandlerThread extends Thread {
 			processCommand(dir, diStream, doStream);
 			break;
 		case "cd":
+			doStream.writeUTF("Enter directory:");
 			String cdDest = diStream.readUTF();
 			this.currentDir = DEFAULT_PATH + File.separatorChar + cdDest;
 			dir = new File(this.currentDir);
+			if (dir.exists()) {
+				doStream.writeUTF("Now in directory: [ +" + this.currentDir + "]");
+			} else {
+				dir.mkdirs();
+				doStream.writeUTF("Directory was not found! so it was created by system");
+			}
+			
 			// TODO: Choose design & Implement
 			processCommand(dir, diStream, doStream);
 			break;
 		case "upload":
-			FileOutputStream fos = new FileOutputStream(currentDir
-					+ File.separatorChar + "file");
-			BufferedOutputStream out = new BufferedOutputStream(fos);
-			byte[] buffer = new byte[1024];
-			int count;
-			InputStream in = socket.getInputStream();
-			while ((count = in.read(buffer)) >= 0) {
-				fos.write(buffer, 0, count);
+			FileOutputStream fos = new FileOutputStream(currentDir + File.separatorChar + "file");
+			BufferedOutputStream bos = new BufferedOutputStream(fos);
+			byte[] b = new byte[1024];
+			int c;
+			InputStream is = socket.getInputStream();
+			while((c = is.read(b)) >= 0){
+				fos.write(b, 0, c);
 			}
 			fos.close();
-
+			processCommand(dir, diStream, doStream);
 			/*
 			 * PrintWriter pw = new PrintWriter(DEFAULT_PATH, "uploadedFile");
 			 * FileOutputStream fos=new FileOutputStream("uploadedFile");
@@ -110,14 +117,14 @@ public class ClientHandlerThread extends Thread {
 				processCommand(dir, diStream, doStream);
 			} else {
 				doStream.writeUTF("Download request received, initiating download...");
-				int c;
-				byte[] b = new byte[1024];
+				int count;
+				byte[] buffer = new byte[1024];
 
 				OutputStream os = socket.getOutputStream();
 				BufferedInputStream bis = new BufferedInputStream(
 						new FileInputStream(myFile));
-				while ((c = bis.read(b)) >= 0) {
-					os.write(b, 0, c);
+				while ((count = bis.read(buffer)) >= 0) {
+					os.write(buffer, 0, count);
 					// out.flush();
 				}
 				bis.close();
@@ -126,7 +133,7 @@ public class ClientHandlerThread extends Thread {
 			// doStream.writeUTF(input.next());
 			
 			//
-			
+			processCommand(dir, diStream, doStream);
 			break;
 		case "q":
 			doStream.writeUTF("Goodbye :)");
