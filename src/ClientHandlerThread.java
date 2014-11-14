@@ -1,6 +1,5 @@
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
-import java.io.BufferedReader;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
@@ -9,17 +8,15 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.io.PrintWriter;
 import java.net.Socket;
 import java.sql.Date;
-import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 
 public class ClientHandlerThread extends Thread {
 
-	private static final String DEFAULT_PATH = "/home/minaz/ftpDir/"; /*default server path,
+	//private static final String DEFAULT_PATH = "~/ftpDir/"; //enable this for linux systems
+	private static final String DEFAULT_PATH = "/home/minaz/Server";/*default server path,
 	as a security measure, clients will only see inside this path*/
 	private final Socket socket; //incoming socket
 	private String currentDir;
@@ -101,7 +98,6 @@ public class ClientHandlerThread extends Thread {
 				doStream.writeUTF("Directory was not found! so it was created by system");
 			}
 
-			// TODO: test
 			processCommand(dir, diStream, doStream);
 			break;
 		case "upload":
