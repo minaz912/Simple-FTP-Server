@@ -1,3 +1,4 @@
+import java.io.File;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -5,10 +6,15 @@ import java.net.Socket;
 public class ConnectionHandler {
 
 	private static final int PORT_NO = 1500;
+	private static final String DEFAULT_PATH = "C:\\Server";
 
 	public static void main(String[] args) {
 		ServerSocket sSocket;
 
+		File def = new File(DEFAULT_PATH);
+		if (!def.exists()) {
+			def.mkdir();
+		}
 		try {
 			if (args.length > 0) {
 				sSocket = new ServerSocket(Integer.parseInt(args[0]));

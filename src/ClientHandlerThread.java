@@ -16,7 +16,7 @@ import java.text.SimpleDateFormat;
 public class ClientHandlerThread extends Thread {
 
 	//private static final String DEFAULT_PATH = "~/ftpDir/"; //enable this for linux systems
-	private static final String DEFAULT_PATH = "/home/minaz/Server";/*default server path,
+	private static final String DEFAULT_PATH = "C:\\Server";/*default server path,
 	as a security measure, clients will only see inside this path*/
 	private final Socket socket; //incoming socket
 	private String currentDir;
