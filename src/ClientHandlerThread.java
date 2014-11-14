@@ -3,6 +3,7 @@ import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.EOFException;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -12,13 +13,17 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.sql.Date;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 
 public class ClientHandlerThread extends Thread {
-	
-	private static final String DEFAULT_PATH = "/home/minaz/ftpDir/";
-	private final Socket socket;
+
+	private static final String DEFAULT_PATH = "/home/minaz/ftpDir/"; /*default server path,
+	as a security measure, clients will only see inside this path*/
+	private final Socket socket; //incoming socket
 	private String currentDir;
-	private File dir;
+	private File dir; //file object of current directory
 
 	// private static final String[] SUPPORTED_CMDS = {"help", "list", "cd",
 	// "download", "upload"};
@@ -34,7 +39,7 @@ public class ClientHandlerThread extends Thread {
 
 	public void run() {
 		try {
-			
+
 			DataOutputStream doStream = new DataOutputStream(
 					socket.getOutputStream());
 			DataInputStream diStream = new DataInputStream(
@@ -44,12 +49,22 @@ public class ClientHandlerThread extends Thread {
 			doStream.writeUTF("\nPlease enter command, enter \"help\" to list all commands, or \"q\" to quit");
 
 			processCommand(dir, diStream, doStream);
+			socket.close();
+		} catch (EOFException e) {
+			System.out.println("Client Disconnected");
+			//System.exit(0);
+			//e.printStackTrace();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
 	}
-
-	private void processCommand(File dir, DataInputStream diStream,
+	
+	/**
+	 * @param dir file object of current directory
+	 * @param diStream Data Input Stream of this thread socket
+	 * @param doStream Data Output Stream of this thread socket
+	 */
+	private synchronized void processCommand(File dir, DataInputStream diStream,
 			DataOutputStream doStream) throws IOException {
 
 		String response = diStream.readUTF();
@@ -66,7 +81,9 @@ public class ClientHandlerThread extends Thread {
 			String fileList = "";
 
 			for (String str : dir.list()) {
-				fileList = fileList.concat(", ").concat(str);
+				fileList = fileList + "\n" + str + "\t";
+				fileList = listFileAttributes(fileList, str);
+				
 			}
 			doStream.writeUTF("Now Listing all files:\n" + fileList);
 			processCommand(dir, diStream, doStream);
@@ -77,23 +94,35 @@ public class ClientHandlerThread extends Thread {
 			this.currentDir = DEFAULT_PATH + File.separatorChar + cdDest;
 			dir = new File(this.currentDir);
 			if (dir.exists()) {
-				doStream.writeUTF("Now in directory: [ +" + this.currentDir + "]");
+				doStream.writeUTF("Now in directory: [ +" + this.currentDir
+						+ "]");
 			} else {
 				dir.mkdirs();
 				doStream.writeUTF("Directory was not found! so it was created by system");
 			}
-			
-			// TODO: Choose design & Implement
+
+			// TODO: test
 			processCommand(dir, diStream, doStream);
 			break;
 		case "upload":
-			FileOutputStream fos = new FileOutputStream(currentDir + File.separatorChar + "file");
+			doStream.writeUTF("Enter file name");///
+			String fn = diStream.readUTF();
+			if (fn.equals("File does not exist!")) {
+				processCommand(dir, diStream, doStream);
+				break;
+			}
+			FileOutputStream fos = new FileOutputStream(currentDir
+					+ File.separatorChar + fn);
 			BufferedOutputStream bos = new BufferedOutputStream(fos);
 			byte[] b = new byte[1024];
 			int c;
 			InputStream is = socket.getInputStream();
-			while((c = is.read(b)) >= 0){
-				fos.write(b, 0, c);
+			while ((c = is.read(b)) >= 0) {
+				bos.write(b, 0, c);
+				if (c < 1024) {
+					bos.flush();
+					break;
+				}
 			}
 			fos.close();
 			processCommand(dir, diStream, doStream);
@@ -109,8 +138,8 @@ public class ClientHandlerThread extends Thread {
 			break;
 		case "download":
 			doStream.writeUTF("Please enter file name to download");
-			String fn = diStream.readUTF();
-			File myFile = new File(currentDir + File.separatorChar + fn);
+			String fName = diStream.readUTF();
+			File myFile = new File(currentDir + File.separatorChar + fName);
 
 			if (!myFile.exists()) {
 				doStream.writeUTF("Invalid file name, please try again");
@@ -131,9 +160,29 @@ public class ClientHandlerThread extends Thread {
 			}
 			// System.out.println(diStream.readUTF());
 			// doStream.writeUTF(input.next());
-			
+
 			//
 			processCommand(dir, diStream, doStream);
+			break;
+		case "mv":
+			doStream.writeUTF("Enter file name to move:");
+			String resp = diStream.readUTF();
+			File temp = new File(currentDir + File.separatorChar + resp);
+			if (temp.exists()) {
+				doStream.writeUTF("Enter subdirectory to move to: (ex. Mina/subdir)");
+				resp = diStream.readUTF();
+				File tempDir = new File(currentDir + File.separatorChar + resp);
+				if (tempDir.exists()) {
+					temp.renameTo(new File(tempDir.getPath() + File.separatorChar + temp.getName()));
+				} else {
+					tempDir.mkdir();
+					temp.renameTo(new File(tempDir.getPath() + File.separatorChar + temp.getName()));
+				}
+				doStream.writeUTF("Move operation successful!");
+			} else {
+				doStream.writeUTF("File does not exist.. Please try again!");
+				processCommand(dir, diStream, doStream);
+			}
 			break;
 		case "q":
 			doStream.writeUTF("Goodbye :)");
@@ -141,9 +190,43 @@ public class ClientHandlerThread extends Thread {
 			System.exit(0);
 			break;
 		default: // redundant
-			doStream.writeUTF("Invalid command... please try again, or enter \"q\" to quit");
+			doStream.writeUTF("Invalid command.. please try again, or enter \"q\" to quit");
 			processCommand(dir, diStream, doStream);
 			break;
 		}
+	}
+
+	/**
+	 * @param fileList a string that contains the current files listed so far
+	 * @param str temporary variable that contains current file name
+	 * @return the first parameter, concatenated with its file object attributes
+	 */
+	private String listFileAttributes(String fileList, String str) {
+		File currentFile = new File(currentDir + File.separatorChar + str);
+		if (currentFile.isDirectory()) {
+			fileList = fileList + " (Folder)";
+		} else if (currentFile.isFile()) {
+			fileList = fileList + " (File)";
+		}
+		if (currentFile.canRead()) {
+			if (currentFile.canWrite()) {
+				fileList = fileList + " Writable";
+			} else {
+				fileList = fileList + " Read-only";
+			}
+			
+		} else {
+			fileList = fileList + " Unreadable";
+		}
+		if (currentFile.isHidden()) {
+			fileList = fileList + " Hidden";
+		} else {
+			fileList = fileList + " Visible";
+		}
+		String lastModified = new SimpleDateFormat("dd-MM-yyyy HH-mm-ss").format(
+			    new Date(currentFile.lastModified()) 
+			);
+		fileList = fileList + " Last Modified: " + lastModified;
+		return fileList;
 	}
 }
